@@ -4,5 +4,5 @@ namespace ParallelGraphProcessor.Interfaces;
 
 public interface ITraversingService
 {
-    Task ProcessAsync(WorkItem workItem);
+    Task ProcessAsync(WorkItem workItem, CancellationToken cancellationToken);
 }

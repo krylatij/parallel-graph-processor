@@ -6,26 +6,27 @@ using Microsoft.Extensions.Options;
 using ParallelGraphProcessor.Configuration;
 using ParallelGraphProcessor.Entities;
 using ParallelGraphProcessor.Interfaces;
+using ParallelGraphProcessor.State;
 
 namespace ParallelGraphProcessor.Workers;
 
 [ExcludeFromCodeCoverage]
 public class TraversingWorker : BackgroundService
 {
-    private readonly WorkKeeper _workKeeper;
+    private readonly TraversingState _traversingState;
     private readonly IServiceProvider _serviceProvider;
     private readonly IOptions<ApplicationConfiguration> _configuration;
     private readonly ILogger _logger;
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
 
     public TraversingWorker(
-        WorkKeeper workKeeper,
+        TraversingState traversingState,
         IServiceProvider serviceProvider,
         IOptions<ApplicationConfiguration> configuration,
         ILogger<TraversingWorker> logger,
         IHostApplicationLifetime hostApplicationLifetime)
     {
-        _workKeeper = workKeeper;
+        _traversingState = traversingState;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _logger = logger;
@@ -38,18 +39,13 @@ public class TraversingWorker : BackgroundService
 
         try
         {
-            PrePopulateTraversingQueue();
-
-            var traversingCompletedTokenSource = new CancellationTokenSource();
-            var aggregatedCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, traversingCompletedTokenSource.Token);
-          
+            PrePopulateTraversingQueue(stoppingToken);
+            
             var workers = new Task[_configuration.Value.TraversingMaxWorkers + 1];
-            var completionEvents = new WaitHandle[_configuration.Value.TraversingMaxWorkers];
-
+   
             for (var i = 0; i < _configuration.Value.TraversingMaxWorkers; i++)
             {
-                var evt = new ManualResetEventSlim();
-                var worker = CreateWorker(aggregatedCancellation.Token, evt);
+                var worker = CreateWorker(stoppingToken);
 
                 if (worker.Exception != null)
                 {
@@ -64,26 +60,13 @@ public class TraversingWorker : BackgroundService
                 _logger.LogInformation("Traversing task was created.");
 
                 workers[i] = worker;
-                completionEvents[i] = evt.WaitHandle;
             }
 
-            workers[^1] = Task.Run(() =>
-            {
-                do
-                {
-                    if (WaitHandle.WaitAll(completionEvents) && _workKeeper.TraversingQueue.Count == 0)
-                    {
-                        traversingCompletedTokenSource.Cancel();
-
-                        _workKeeper.CompleteTraversing();
-                    }
-                } while (_workKeeper.TraversingQueue.Count > 0);
-
-            }, stoppingToken);
+            workers[^1] = Task.Run(() => _traversingState.IsCompletedEvent.WaitOne(), stoppingToken);
 
             await Task.WhenAll(workers);
 
-            _logger.LogInformation($"Traversing completed. {_workKeeper.TotalItemsTraversed} files were processed");
+            _logger.LogInformation($"Traversing completed. {_traversingState.TotalItemsProcessed} files were processed");
         }
         catch (Exception ex)
         {
@@ -95,44 +78,37 @@ public class TraversingWorker : BackgroundService
     }
 
 
-    private void PrePopulateTraversingQueue()
+    private void PrePopulateTraversingQueue(CancellationToken stoppingToken)
     {
         foreach (var root in _configuration.Value.TraversingRoots)
         {
-            _workKeeper.TraversingQueue.Add(new WorkItem { IsDirectory = true, FullPath = root });
+            _traversingState.Add(new WorkItem { IsDirectory = true, FullPath = root }, stoppingToken);
         }
     }
 
-    private async Task CreateWorker(CancellationToken stoppingToken, ManualResetEventSlim evt)
+    private async Task CreateWorker(CancellationToken stoppingToken)
     {
         await Task.Yield();
 
         using var scope = _serviceProvider.CreateScope();
         var traversingService = scope.ServiceProvider.GetRequiredService<ITraversingService>();
-        while (!stoppingToken.IsCancellationRequested)
+        while (!stoppingToken.IsCancellationRequested && !_traversingState.IsCompleted)
         {
+            WorkItem workItem = null;
             try
             {
-                if (_workKeeper.TraversingQueue.TryTake(out var workItem,
+                if (_traversingState.TryTake(out workItem,
                         _configuration.Value.TraversingTakeWorkTimeoutMs,
                         stoppingToken))
                 {
-                    evt.Reset();
-                    await traversingService.ProcessAsync(workItem);
-                }
-                else
-                {
-                    evt.Set();
-                    await Task.Delay(100, stoppingToken);
+                    await traversingService.ProcessAsync(workItem, stoppingToken);
+                    _traversingState.Commit(workItem.FullPath);
                 }
             }
             catch (Exception ex)
             {
+                _traversingState.Commit(workItem?.FullPath);
                 _logger.LogError(ex, "Unable to process message. Exception is caught. Execution continues.");
-            }
-            finally
-            {
-                evt.Set();
             }
         }
     }

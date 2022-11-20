@@ -11,6 +11,7 @@ using ParallelGraphProcessor.Entities;
 using ParallelGraphProcessor.Interfaces;
 using ParallelGraphProcessor.Monitoring;
 using ParallelGraphProcessor.Services;
+using ParallelGraphProcessor.State;
 using ParallelGraphProcessor.Workers;
 using Serilog;
 
@@ -34,16 +35,22 @@ hostBuilder
         x.AddScoped<IProcessingService, ProcessingService>();
 
         x.AddSingleton<ProgressMonitor>();
+        
+        //TODO: create separate config dto
+        x.AddSingleton(x =>
+        {
+            var opt = x.GetService<IOptions<ApplicationConfiguration>>();
+            var logger = x.GetService<ILogger<TraversingState>>();
+
+            return new TraversingState(opt.Value.TraversingQueueSize, logger);
+        });
 
         x.AddSingleton(x =>
         {
             var opt = x.GetService<IOptions<ApplicationConfiguration>>();
+            var logger = x.GetService<ILogger<ProcessingState>>();
 
-            return new WorkKeeper
-            {
-                TraversingQueue = new BlockingCollection<WorkItem>(opt.Value.TraversingQueueSize),
-                ProcessingQueue = new BlockingCollection<WorkItem>(opt.Value.ProcessingQueueSize)
-            };
+            return new ProcessingState(opt.Value.ProcessingQueueSize, logger);
         });
 
 

@@ -1,5 +1,4 @@
-﻿using System.Diagnostics.Eventing.Reader;
-using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ParallelGraphProcessor.Monitoring;
 
