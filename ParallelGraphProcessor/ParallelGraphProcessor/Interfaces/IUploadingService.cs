@@ -2,7 +2,7 @@
 
 namespace ParallelGraphProcessor.Interfaces;
 
-public interface IProcessingService
+public interface IUploadingService
 {
     Task ProcessAsync(WorkItem workItem, CancellationToken cancellationToken);
 }

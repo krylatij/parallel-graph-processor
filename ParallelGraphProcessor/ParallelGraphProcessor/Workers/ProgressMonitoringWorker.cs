@@ -4,13 +4,13 @@ using ParallelGraphProcessor.Monitoring;
 
 namespace ParallelGraphProcessor.Workers
 {
-    public class MonitoringWorker : BackgroundService
+    public class ProgressMonitoringWorker : BackgroundService
     {
-        private readonly ILogger<MonitoringWorker> _logger;
+        private readonly ILogger<ProgressMonitoringWorker> _logger;
         private readonly IHostApplicationLifetime _hostApplicationLifetime;
         private readonly ProgressMonitor _monitor;
 
-        public MonitoringWorker(ILogger<MonitoringWorker> logger, 
+        public ProgressMonitoringWorker(ILogger<ProgressMonitoringWorker> logger, 
             IHostApplicationLifetime hostApplicationLifetime,
             ProgressMonitor monitor)
         {

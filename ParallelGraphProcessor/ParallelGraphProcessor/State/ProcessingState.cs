@@ -1,11 +1,13 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using ParallelGraphProcessor.Configuration;
 using ParallelGraphProcessor.Entities;
 
 namespace ParallelGraphProcessor.State;
 
 public class ProcessingState : WorkState<WorkItem>
 {
-    public ProcessingState(int queueSize, ILogger<ProcessingState> logger) : base(queueSize, logger)
+    public ProcessingState(IOptions<ProcessingConfiguration> configuration, ILogger<ProcessingState> logger) : base(configuration.Value.MaxQueueSize, logger)
     {
     }
 }

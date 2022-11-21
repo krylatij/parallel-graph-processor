@@ -1,11 +1,13 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using ParallelGraphProcessor.Configuration;
 using ParallelGraphProcessor.Entities;
 
 namespace ParallelGraphProcessor.State;
 
 public class TraversingState : WorkState<WorkItem>
 {
-    public TraversingState(int queueSize, ILogger<TraversingState> logger) : base(queueSize, logger)
+    public TraversingState(IOptions<TraversingConfiguration> configuration, ILogger<TraversingState> logger) : base(configuration.Value.MaxQueueSize, logger)
     {
     }
 }

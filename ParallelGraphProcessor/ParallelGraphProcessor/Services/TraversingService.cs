@@ -21,11 +21,10 @@ namespace ParallelGraphProcessor.Services
         public async Task ProcessAsync(WorkItem workItem, CancellationToken cancellationToken)
         {
             _logger.LogInformation($"Traversing folder: '{workItem.FullPath}'");
-
+            
             foreach (var directory in Directory.EnumerateDirectories(workItem.FullPath))
             {
                 _traversingState.Add(new WorkItem { IsDirectory = true, FullPath = directory }, cancellationToken);
-
             }
 
             foreach (var file in Directory.EnumerateFiles(workItem.FullPath))

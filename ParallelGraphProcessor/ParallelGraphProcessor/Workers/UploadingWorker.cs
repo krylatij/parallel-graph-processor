@@ -11,25 +11,25 @@ using ParallelGraphProcessor.State;
 namespace ParallelGraphProcessor.Workers;
 
 [ExcludeFromCodeCoverage]
-public class ProcessingWorker : BackgroundService
+public class UploadingWorker : BackgroundService
 {
+    private readonly UploadingState _uploadingState;
     private readonly ProcessingState _processingState;
-    private readonly TraversingState _traversingState;
-    private readonly IOptions<ProcessingConfiguration> _configuration;
-    private readonly ILogger<ProcessingWorker> _logger;
+    private readonly IOptions<UploadingConfiguration> _configuration;
+    private readonly ILogger<UploadingWorker> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
     
-    public ProcessingWorker(
+    public UploadingWorker(
+        UploadingState uploadingState,
         ProcessingState processingState,
-        TraversingState traversingState,
-        IOptions<ProcessingConfiguration> configuration,
+        IOptions<UploadingConfiguration> configuration,
         IServiceProvider serviceProvider,
-        ILogger<ProcessingWorker> logger,
+        ILogger<UploadingWorker> logger,
         IHostApplicationLifetime hostApplicationLifetime)
     {
+        _uploadingState = uploadingState;
         _processingState = processingState;
-        _traversingState = traversingState;
         _configuration = configuration;
         _logger = logger;
         _serviceProvider = serviceProvider;
@@ -39,7 +39,7 @@ public class ProcessingWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Processing process has started.");
+        _logger.LogInformation("Uploading process has started.");
         
         try
         {
@@ -53,25 +53,25 @@ public class ProcessingWorker : BackgroundService
                 {
                     foreach (var ex in worker.Exception.InnerExceptions)
                     {
-                        _logger.LogError(ex, "Failed to create processing worker.");
+                        _logger.LogError(ex, "Failed to create uploading worker.");
                     }
 
                     throw worker.Exception;
                 }
 
-                _logger.LogInformation("Processing task was created.");
+                _logger.LogInformation("Uploading task was created.");
 
                 workers[i] = worker;
             }
 
-            //processing can be completed only after traversing completion
-            _processingState.RegisterPrecondition(() => _traversingState.IsCompleted);
+            //processing can be completed only after processing completion
+            _uploadingState.RegisterPrecondition(() => _processingState.IsCompleted);
 
-            workers[^1] = Task.Run(() => _processingState.IsCompletedEvent.WaitOne(), stoppingToken);
+            workers[^1] = Task.Run(() => _uploadingState.IsCompletedEvent.WaitOne(), stoppingToken);
 
             await Task.WhenAll(workers);
 
-            _logger.LogInformation($"Processing completed. {_processingState.TotalItemsProcessed} files were processed.");
+            _logger.LogInformation($"Uploading completed. {_uploadingState.TotalItemsProcessed} files were processed.");
         }
         catch (Exception ex)
         {
@@ -79,7 +79,7 @@ public class ProcessingWorker : BackgroundService
             _hostApplicationLifetime.StopApplication();
         }
 
-        _logger.LogInformation("Processing worker has finished.");
+        _logger.LogInformation("Uploading worker has finished.");
     }
 
     private async Task CreateWorker(CancellationToken stoppingToken)
@@ -87,21 +87,22 @@ public class ProcessingWorker : BackgroundService
         await Task.Yield();
 
         using var scope = _serviceProvider.CreateScope();
-        var processingService = scope.ServiceProvider.GetRequiredService<IProcessingService>();
-        while (!stoppingToken.IsCancellationRequested && !_processingState.IsCompleted)
+      
+        var uploadingService = scope.ServiceProvider.GetRequiredService<IUploadingService>();
+        while (!stoppingToken.IsCancellationRequested && !_uploadingState.IsCompleted)
         {
             try
             {
-                if (_processingState.TryTake(out var workItem, _configuration.Value.TakeWorkTimeoutMs,
+                if (_uploadingState.TryTake(out var workItem, _configuration.Value.TakeWorkTimeoutMs,
                         stoppingToken))
                 {
-                    await processingService.ProcessAsync(workItem, stoppingToken);
-                    await _processingState.CommitAsync();
+                    await uploadingService.ProcessAsync(workItem, stoppingToken);
+                    await _uploadingState.CommitAsync();
                 }
             }
             catch (Exception ex)
             {
-                await _processingState.CommitAsync();
+                await _uploadingState.CommitAsync();
                 _logger.LogError(ex, "Unable to process message. Exception is caught. Execution continues.");
             }
         }

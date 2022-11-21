@@ -15,14 +15,14 @@ public class TraversingWorker : BackgroundService
 {
     private readonly TraversingState _traversingState;
     private readonly IServiceProvider _serviceProvider;
-    private readonly IOptions<ApplicationConfiguration> _configuration;
+    private readonly IOptions<TraversingConfiguration> _configuration;
     private readonly ILogger _logger;
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
 
     public TraversingWorker(
         TraversingState traversingState,
         IServiceProvider serviceProvider,
-        IOptions<ApplicationConfiguration> configuration,
+        IOptions<TraversingConfiguration> configuration,
         ILogger<TraversingWorker> logger,
         IHostApplicationLifetime hostApplicationLifetime)
     {
@@ -41,9 +41,9 @@ public class TraversingWorker : BackgroundService
         {
             PrePopulateTraversingQueue(stoppingToken);
             
-            var workers = new Task[_configuration.Value.TraversingMaxWorkers + 1];
+            var workers = new Task[_configuration.Value.MaxWorkers + 1];
    
-            for (var i = 0; i < _configuration.Value.TraversingMaxWorkers; i++)
+            for (var i = 0; i < _configuration.Value.MaxWorkers; i++)
             {
                 var worker = CreateWorker(stoppingToken);
 
@@ -80,7 +80,7 @@ public class TraversingWorker : BackgroundService
 
     private void PrePopulateTraversingQueue(CancellationToken stoppingToken)
     {
-        foreach (var root in _configuration.Value.TraversingRoots)
+        foreach (var root in _configuration.Value.Roots)
         {
             _traversingState.Add(new WorkItem { IsDirectory = true, FullPath = root }, stoppingToken);
         }
@@ -94,20 +94,19 @@ public class TraversingWorker : BackgroundService
         var traversingService = scope.ServiceProvider.GetRequiredService<ITraversingService>();
         while (!stoppingToken.IsCancellationRequested && !_traversingState.IsCompleted)
         {
-            WorkItem workItem = null;
             try
             {
-                if (_traversingState.TryTake(out workItem,
-                        _configuration.Value.TraversingTakeWorkTimeoutMs,
+                if (_traversingState.TryTake(out var workItem,
+                        _configuration.Value.TakeWorkTimeoutMs,
                         stoppingToken))
                 {
                     await traversingService.ProcessAsync(workItem, stoppingToken);
-                    _traversingState.Commit(workItem.FullPath);
+                    await _traversingState.CommitAsync();
                 }
             }
             catch (Exception ex)
             {
-                _traversingState.Commit(workItem?.FullPath);
+                await _traversingState.CommitAsync();
                 _logger.LogError(ex, "Unable to process message. Exception is caught. Execution continues.");
             }
         }

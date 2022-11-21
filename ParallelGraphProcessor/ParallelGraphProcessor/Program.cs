@@ -1,13 +1,10 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using ParallelGraphProcessor.Configuration;
-using ParallelGraphProcessor.Entities;
 using ParallelGraphProcessor.Interfaces;
 using ParallelGraphProcessor.Monitoring;
 using ParallelGraphProcessor.Services;
@@ -33,33 +30,23 @@ hostBuilder
     {
         x.AddScoped<ITraversingService, TraversingService>();
         x.AddScoped<IProcessingService, ProcessingService>();
+        x.AddScoped<IUploadingService, UploadingService>();
 
         x.AddSingleton<ProgressMonitor>();
         
-        //TODO: create separate config dto
-        x.AddSingleton(x =>
-        {
-            var opt = x.GetService<IOptions<ApplicationConfiguration>>();
-            var logger = x.GetService<ILogger<TraversingState>>();
+        x.AddSingleton<TraversingState>();
+        x.AddSingleton<ProcessingState>();
+        x.AddSingleton<UploadingState>();
 
-            return new TraversingState(opt.Value.TraversingQueueSize, logger);
-        });
-
-        x.AddSingleton(x =>
-        {
-            var opt = x.GetService<IOptions<ApplicationConfiguration>>();
-            var logger = x.GetService<ILogger<ProcessingState>>();
-
-            return new ProcessingState(opt.Value.ProcessingQueueSize, logger);
-        });
-
-
-        x.AddHostedService<MonitoringWorker>();
+        x.AddHostedService<ProgressMonitoringWorker>();
         x.AddHostedService<TraversingWorker>();
         x.AddHostedService<ProcessingWorker>();
-        
-        
+        x.AddHostedService<UploadingWorker>();
+
         x.Configure<ApplicationConfiguration>(context.Configuration.GetSection(ApplicationConfiguration.SectionName));
+        x.Configure<TraversingConfiguration>(context.Configuration.GetSection(ApplicationConfiguration.SectionName).GetSection("Traversing"));
+        x.Configure<ProcessingConfiguration>(context.Configuration.GetSection(ApplicationConfiguration.SectionName).GetSection("Processing"));
+        x.Configure<UploadingConfiguration>(context.Configuration.GetSection(ApplicationConfiguration.SectionName).GetSection("Uploading"));
     });
 
 try
@@ -79,5 +66,8 @@ finally
 }
 
 //need this to use Program in integration tests
-[ExcludeFromCodeCoverage]
-public partial class Program { }
+namespace ParallelGraphProcessor
+{
+    [ExcludeFromCodeCoverage]
+    public partial class Program { }
+}
