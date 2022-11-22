@@ -43,7 +43,7 @@ public class ProcessingWorker : BackgroundService
         
         try
         {
-            var workers = new Task[_configuration.Value.MaxWorkers + 1];
+            var workers = new Task[_configuration.Value.MaxWorkers];
       
             for (var i = 0; i < _configuration.Value.MaxWorkers; i++)
             {
@@ -66,8 +66,6 @@ public class ProcessingWorker : BackgroundService
 
             //processing can be completed only after traversing completion
             _processingState.RegisterPrecondition(() => _traversingState.IsCompleted);
-
-            workers[^1] = Task.Run(() => _processingState.IsCompletedEvent.WaitOne(), stoppingToken);
 
             await Task.WhenAll(workers);
 
@@ -98,6 +96,7 @@ public class ProcessingWorker : BackgroundService
                     await processingService.ProcessAsync(workItem, stoppingToken);
                     await _processingState.CommitAsync();
                 }
+
             }
             catch (Exception ex)
             {

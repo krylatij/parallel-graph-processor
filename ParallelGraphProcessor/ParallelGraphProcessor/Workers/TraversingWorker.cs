@@ -41,7 +41,7 @@ public class TraversingWorker : BackgroundService
         {
             PrePopulateTraversingQueue(stoppingToken);
             
-            var workers = new Task[_configuration.Value.MaxWorkers + 1];
+            var workers = new Task[_configuration.Value.MaxWorkers];
    
             for (var i = 0; i < _configuration.Value.MaxWorkers; i++)
             {
@@ -61,8 +61,6 @@ public class TraversingWorker : BackgroundService
 
                 workers[i] = worker;
             }
-
-            workers[^1] = Task.Run(() => _traversingState.IsCompletedEvent.WaitOne(), stoppingToken);
 
             await Task.WhenAll(workers);
 

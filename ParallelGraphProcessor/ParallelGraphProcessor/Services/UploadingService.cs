@@ -17,7 +17,7 @@ namespace ParallelGraphProcessor.Services
         {
             _logger.LogInformation($"Uploading {workItem.FullPath}.");
 
-            await Task.Delay(1_000);
+            await Task.Delay(1_00);
         }
     }
 }

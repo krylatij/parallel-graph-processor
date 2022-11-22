@@ -43,7 +43,7 @@ public class UploadingWorker : BackgroundService
         
         try
         {
-            var workers = new Task[_configuration.Value.MaxWorkers + 1];
+            var workers = new Task[_configuration.Value.MaxWorkers];
       
             for (var i = 0; i < _configuration.Value.MaxWorkers; i++)
             {
@@ -66,8 +66,6 @@ public class UploadingWorker : BackgroundService
 
             //processing can be completed only after processing completion
             _uploadingState.RegisterPrecondition(() => _processingState.IsCompleted);
-
-            workers[^1] = Task.Run(() => _uploadingState.IsCompletedEvent.WaitOne(), stoppingToken);
 
             await Task.WhenAll(workers);
 

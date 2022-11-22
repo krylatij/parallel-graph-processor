@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace ParallelGraphProcessor.State;
@@ -28,8 +29,6 @@ public abstract class WorkState<T>
         _logger = logger;
         _queue = new BlockingCollection<T>(new ConcurrentQueue<T>(), queueSize);
     }
-
-    public ManualResetEvent IsCompletedEvent { get; } = new(false);
 
     public bool IsCompleted => _queue.IsCompleted;
 
@@ -70,7 +69,6 @@ public abstract class WorkState<T>
                 else
                 {
                     _queue.CompleteAdding();
-                    IsCompletedEvent.Set();
                 }
             }
         }
